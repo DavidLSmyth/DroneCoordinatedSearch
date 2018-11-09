@@ -16,6 +16,9 @@ import copy
 import random
 import typing
 import functools
+import json
+import multiprocessing
+import pathlib
 import AirSimInterface.client as airsim
 from AirSimInterface.types import *
 import numpy as np
@@ -301,18 +304,28 @@ class ObservationListManager:
     def __init__(self, self_agent_name: 'name of the agent that owns this observation list manager'):
         #self.self_meas_list = []
         #key value pairs of form agent_name: list of AgentObservations
-        self.meas_lists = {}
-        self.init_rav_meas_list(self_agent_name)
+        self.observation_sets = {}
+        self.init_rav_observation_set(self_agent_name)
     
-    def init_rav_meas_list(self, rav_name, observations: typing.List[AgentObservation]=[]):
-        self.meas_lists[rav_name] = observations
+    def init_rav_observation_set(self, rav_name, observations: typing.Set[AgentObservation]=set()):
+        '''initialise a new list of observations for a RAV'''
+        self.observation_sets[rav_name] = observations
     
-    def get_meas_list(self, rav_name):
-        return self.meas_lists[rav_name]
+    def get_observation_set(self, rav_name) -> typing.Set[AgentObservation]:
+        '''Get list of observations from a RAV'''
+        return self.observation_sets[rav_name]
     
-    def update_rav_meas_list(self, rav_name, observations: typing.List[AgentObservation]):
+    def update_rav_obs_set(self, rav_name, observations: typing.Set[AgentObservation]):
         #check if rav is present before updating
-        self.meas_lists[rav_name].extend(observations)
+        if rav_name not in self.observation_sets:
+            self.init_rav_observation_set(rav_name)
+        #this avoids recording duplicate observations
+        self.observation_sets[rav_name].update(observations)
+        
+    def update_from_other_obs_list_man(self, other):
+        '''Might need to check that the timestamps must be different...'''
+        for rav_name, observation_set in other.observation_sets.items():
+            self.update_rav_obs_set(rav_name, observation_set)
         
    
 test_ObservationListManager = ObservationListManager('agent1')
@@ -321,14 +334,16 @@ obs1 = AgentObservation(UE4Coord(0,0),0.5, 1, 1234, 'agent2')
 obs2 = AgentObservation(UE4Coord(0,0),0.7, 2, 1235, 'agent2')
 obs3 = AgentObservation(UE4Coord(0,1),0.9, 3, 1237, 'agent2')
 
-test_ObservationListManager.init_rav_meas_list('agent2', [obs1, obs2])
-test_ObservationListManager.update_rav_meas_list('agent2', [obs3])
+test_ObservationListManager.init_rav_observation_set('agent2', set([obs1, obs2]))
+test_ObservationListManager.update_rav_obs_set('agent2', set([obs3]))
 
-assert test_ObservationListManager.get_meas_list('agent2') == [obs1, obs2, obs3]
-assert test_ObservationListManager.get_meas_list('agent1') == []
+assert test_ObservationListManager.get_observation_set('agent2') == set([obs1, obs2, obs3])
+assert test_ObservationListManager.get_observation_set('agent1') == set()
    
-
-
+#test that duplicate measurements won't occur
+obs4 = AgentObservation(UE4Coord(0,1),0.9, 3, 1237, 'agent2')
+test_ObservationListManager.update_rav_obs_set('agent2', set([obs4]))
+assert test_ObservationListManager.get_observation_set('agent2') == set([obs1, obs2, obs3])
 
 #%%
 
@@ -413,50 +428,11 @@ def create_belief_map_from_observations(grid: UE4Grid, agent_name: str, agent_be
         prior * product(over all i observations) observation_i + (1-prior) * product(over all i observations) (1-observation_i)
     '''
 
-    return_bel_map = create_bel_map(grid.get_grid(), agent_name, agent_belief_prior)
+    return_bel_map = create_belief_map(grid.get_grid(), agent_name, agent_belief_map_prior)
     #update belief map based on all observations...
     return_bel_map.update_from_observations(agent_observations)
     #grid, agent_name, prior = {}
-    
 
-agent1_belief_map = create_belief_map(test_grid, "agent1")
-#assert test_map.get_belief_map_component(UE4Coord(0,0)) == BeliefMapComponent(UE4Coord(0,0), 1/len(test_grid.get_grid_points()))
-
-#assert test_map.get_belief_map_component(UE4Coord(0,0)) == BeliefMapComponent(UE4Coord(0,0), 0.9)
-
-agent1_observations = [AgentObservation(UE4Coord(0,0), 0.9, 1, time.time(), 'agent1')]
-agent1_belief_map.update_from_observation(agent1_observations[0])
-
-obs1 = AgentObservation(UE4Coord(0,0),0.5, 1, time.time()+1, 'agent2')
-obs2 = AgentObservation(UE4Coord(0,0),0.7, 2, time.time()+2, 'agent2')
-obs3 = AgentObservation(UE4Coord(0,1),0.9, 3, time.time()+3, 'agent2')
-
-agent_observations = [obs1, obs2, obs3]
-
-
-#AgentObservation = namedtuple('obs_location', ['grid_loc','probability','timestep', 'timestamp', 'observer_name'])
-
-update_belief_map_from_meas(test_map, agent1_observations, agent2_observations)
-assert test_map.get_belief_map_component(UE4Coord(0,0)).likelihood 
-
-
-print(obs_grid1.get_belief_map_component(test_grid[0]))
-print(obs_grid1.get_belief_map_component(test_grid[5]))
-
-print('\n\n')
-
-print(obs_grid2.get_belief_map_component(test_grid[0]))
-print(obs_grid2.get_belief_map_component(test_grid[5]))
-
-obs_grid1 = merge_occ_grids(obs_grid1, obs_grid2)
-
-print('\n\n',obs_grid1[grid[0]])
-print(obs_grid1[grid[5]])
-
-
-assert obs_grid1 == obs_grid2
-
-get_move_from_bel_map(test_map, UE4Coord(0,0), 10, 12, 0.2)
 #update_bel_map(update_bel_map(test_map, 0.5, 3), 0.5,3)
     
 
@@ -485,7 +461,7 @@ class OccupancyGridAgent():
     #break apart this into components, one which manages actuation/sensing, one which manages/represents state, etc.
     def __init__(self, grid, move_from_bel_map_callable, height, epsilon, multirotor_client, agent_name, performance_csv_path: "file path that agent can write performance to", prior = []):
         #grid, agent_name, prior = {}
-        self.curr_belief_map = create_belief_map(grid.get_grid(), agent_name, prior)
+        #self.curr_belief_map = create_belief_map(grid.get_grid(), agent_name, prior)
         self.rav = multirotor_client
         self.grid = grid
         self.grid_locs = grid.get_grid()
@@ -532,21 +508,7 @@ class OccupancyGridAgent():
     
     def get_agent(self):
         return self.rav
-    
-    def get_grid_locs_likelihoods_map(self):
-        return {loc: obs.likelihood for loc, obs in self.grid.items()}
-    
-    def get_grid_locs_likelihoods_lists(self):
-        keys = self.get_grid_locs_likelihoods_map.keys()
-        return ([keys],[self.get_grid_locs_likelihoods_map[key] for key in keys])
-    
-    #'timestep','timestamp','rav_name',
-    #                                             'position_intended','position_measured',
-    #                                             'total_dist_travelled','remaining_batt_cap',
-    #                                             'sensor_reading','occ_grid_locs',
-    #                                             'occ_grid_likelihoods','coordinated_with_other_bool',
-    #                                             'coordinated_with_other_names'
-    
+        
     def get_agent_state_for_analysis(self):
         return AgentAnalysisState(self.timestep, time.time(), self.get_agent_name(), 
                                   self.current_pos_intended, self.current_pos_measured,
@@ -562,26 +524,30 @@ class OccupancyGridAgent():
     def update_state_for_analysis_file(self, file_path, csv_row):
         _update_state_for_analysis_file(file_path, csv_row)
         
+        
+    #coordination strategy:
+    #agent will write all measurements in its possession to a file at each timestep. When communication requested,
+    #other agent will read all measurements from the file.
+        
     def can_coord_with_other(self, other_rav_name):
         #check if any other ravs in comm radius. if so, return which ravs can be communicated with
         return self.rav.can_coord_with_other(other_rav_name)
     
     def coord_with_other(self, other_rav_name):
-        #coordinate with other rav by requesting their measurement list and sending our own measurement list
-        #first write own measurement list to file
-       if self.can_coord_with_other(other_rav_name):
-           pass
+        '''coordinate with other rav by requesting their measurement list and sending our own measurement list first write own measurement list to file'''
+        if self.can_coord_with_other(other_rav_name):
+            observations_from_other = self._read_observations(self)
+            self.observation_manager.update_rav_obs_set(observations_from_other)
        
-    def receieve_measurement(self, measurements):
-        pass
     
-    def send_measurements(self, other_rav):
-        other_rav.send_measurements
+    def _write_measurements(self, file_loc):
+        '''writes agent measurements to file to be read by other agent'''
+        with open(file_loc, 'w') as f:
+            json.dump(self.observation_manager.observation_lists, f)
     
-    def merge_measurement_list(self, other_agent_occ_grid):
-        '''Each agent has a measurement list of their own sensor readings and the sensor readings of other RAVs.
-        If can communicate, take all sensor readings from other RAVs.'''
-        pass
+    def _read_measurements(self, file_loc):
+        with open(file_loc, 'r') as f:
+            return json.loads(f)
     
     def record_image(self):
         responses = self.rav.simGetImages([ImageRequest("3", ImageType.Scene)])
@@ -613,8 +579,6 @@ class OccupancyGridAgent():
         #['grid_loc','probability','timestep', 'timestamp', 'observer_name'])
         self.observation_manager.update_rav_meas_list(self.agent_name, [AgentObservation(self.current_pos_intended, self.current_reading, self.timestep, time.time(), self.agent_name)])
         
-        #update belief map based on sensor reading
-        self.curr_belief_map.update_from_prob(self.current_pos_intended, self.current_reading)   
         
     def explore_t_timesteps(self, t: int):
         for i in range(t):
@@ -629,37 +593,37 @@ class OccupancyGridAgent():
         return (suspected_position, suspected_pos_likelihood)
                 
         
-        
-        
-if __name__ == '__main__':
-    rav = airsim.MultirotorClient()
+       
+def create_rav(port):
+    rav = airsim.MultirotorClient(port)
     rav.confirmConnection()
     rav.enableApiControl(True)
     rav.armDisarm(True)
-    rav.simShowPawnPath(False, 1200, 20)
-    rav.takeoffAsync().join()
-    print(rav.getMultirotorState().position)
-    rav.moveToPositionAsync(100, 100, -10, 9).join()
-    print(rav.getMultirotorState().position)
-    print(rav.battery.get_battery_cap())
-    rav.moveToPositionAsync(0, 0, -10, 9).join()
-    print(rav.getMultirotorState().position)
-    print(rav.battery.get_battery_cap())
-    rav.moveToPositionAsync(100, 100, -10, 9).join()
-    print(rav.battery.get_battery_cap())
-    rav.moveToPositionAsync(0, 0, -10, 9).join()
-    print(rav.battery.get_battery_cap())
-    print(rav.getMultirotorState().position)
-    rav.moveToPositionAsync(100, 100, -10, 9).join()
-    print(rav.battery.get_battery_cap())
-    rav.moveToPositionAsync(0, 0, -10, 9).join()
-    print(rav.battery.get_battery_cap())
+    return rav
+
+def run_t_timesteps(occupancy_grid_agent):
+    occupancy_grid_agent.expore_t_timesteps(2)
+        
+if __name__ == '__main__':
     
-    print('landing')
-    #rav.landAsync().join()
-    rav.armDisarm(False)
-    rav.enableApiControl(False)
-    #grid =  UE4Grid(20, 15, UE4Coord(0,0), 120, 150)
+    rav1 = create_rav(41451)
+    rav2 = create_rav(41452)
+    
+    #rav1.simShowPawnPath(False, 1200, 20)
+
+    #grid shared between rav
+    grid =  UE4Grid(20, 15, UE4Coord(0,0), 120, 150)
+    
+    #grid, move_from_bel_map_callable, height, epsilon, multirotor_client, agent_name, performance_csv_path: "file path that agent can write performance to", prior = []
+    occupancy_grid_agent1 = OccupancyGridAgent(grid, get_move_from_belief_map, -12, 0.3, rav1, "Drone1", pathlib.Path("D:\ReinforcementLearning\DetectSourceAgent\Analysis"))
+    occupancy_grid_agent2 = OccupancyGridAgent(grid, get_move_from_belief_map, -12, 0.3, rav2, "Drone2")
+    p1 = multiprocessing.Process(target = run_t_timesteps, args = (occupancy_grid_agent1))
+    p2 = multiprocessing.Process(target = run_t_timesteps, args = (occupancy_grid_agent2))
+    p1.start()
+    p1.join()
+    p2.start()
+    p2.join()
+    
     # showPlannedWaypoints(self, x1, y1, z1, x2, y2, z2, thickness=50, lifetime=10, debug_line_color='red', vehicle_name = '')
     #for grid_coord_index in range(1,len(grid.get_grid())):
     #    rav.showPlannedWaypoints(grid.get_grid()[grid_coord_index-1].x_val, 
