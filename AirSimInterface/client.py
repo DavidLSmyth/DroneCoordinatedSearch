@@ -1,7 +1,10 @@
 from __future__ import print_function
+import sys
+sys.path.append('..')
+sys.path.append('../..')
 
-from ReinforcementLearning.utils import *
-from ReinforcementLearning.types import *
+from AirSimInterface.utils import *
+from AirSimInterface.types import *
 
 import msgpackrpc #install as admin: pip install msgpack-rpc-python
 import numpy as np #pip install numpy

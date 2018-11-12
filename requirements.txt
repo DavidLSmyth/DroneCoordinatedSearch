@@ -1,0 +1,3 @@
+requests
+numpy
+msgpack-rpc-python
