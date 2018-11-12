@@ -25,8 +25,8 @@ class VehicleClient:
     def getRemainingBatteryCap(self):
         return self.battery.cap_remaining    
     
-    def getVehiclesInRange(self, otherVehiclesNames, range_m):
-        return list(filter(lambda vehicle_name: self.simGetGroundTruthKinematics(vehicle_name).position.distance_to(self.simGetGroundTruthKinematics())<range_m, otherVehiclesNames))
+    def getVehiclesInRange(self, vehicle_name, otherVehiclesNames, range_m):
+        return list(filter(lambda other_vehicle_name: self.simGetGroundTruthKinematics(other_vehicle_name).position.distance_to(self.simGetGroundTruthKinematics(vehicle_name)) < range_m, otherVehiclesNames))
     
     def can_coord_with_other(self, otherVehicleName, range_m):
         return otherVehicleName in self.getVehiclesInRange(otherVehicleName, range_m)

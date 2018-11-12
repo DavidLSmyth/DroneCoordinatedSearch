@@ -307,6 +307,7 @@ test_map.update_from_observation(obs2)
 test_map.update_from_observation(obs1)
 assert 0.54 < test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.55 
 
+
 class ObservationListManager:
     '''Manages the sensor measurements of other agents'''
     
@@ -316,12 +317,17 @@ class ObservationListManager:
         self.observation_sets = dict()
         self.agent_name = agent_name
         #agent should initialize its own observations
-        self.init_rav_observation_set(self.agent_name)
-        print("self.observation_sets = {}".format(self.observation_sets))
+        self.init_rav_observation_set(self.agent_name)    
     
-    def init_rav_observation_set(self, rav_name, observations: typing.Set[AgentObservation]=set()):
+    #really strange behaviour: using this initialises the class with observations that don't exist... self.observation_sets[rav_name] = set()
+    def init_rav_observation_set(self, rav_name, observations = None):
         '''initialise a new list of observations for a RAV'''
-        self.observation_sets[rav_name] = observations
+        if not observations:
+            self.observation_sets[rav_name] = set()
+        else:
+            self.observation_sets[rav_name] = observations
+        #self.observation_sets[rav_name] = observations
+    
 
     def get_all_observations(self):
         return functools.reduce(lambda x,y: x.union(y) if x else y, self.observation_sets.values(), set())
@@ -351,6 +357,7 @@ class ObservationListManager:
 test_grid = UE4GridFactory(1, 1, UE4Coord(0,0), 6, 5)
 
 test_ObservationListManager = ObservationListManager('agent1')
+test_ObservationListManager.observation_sets
 
 obs1 = AgentObservation(UE4Coord(0,0),0.5, 1, 1234, 'agent2')
 obs2 = AgentObservation(UE4Coord(0,0),0.7, 2, 1235, 'agent2')
@@ -373,9 +380,10 @@ assert not test_ObservationListManager.get_all_observations().difference(set([ob
 
 ###################################################
 # Check that duplicate observations aren't added
-grid = UE4GridFactory(1, 1, UE4Coord(0,0), 5, 5)
-
+test_grid = UE4GridFactory(1, 1, UE4Coord(0,0), 6, 5)
 test1_ObservationListManager = ObservationListManager('agent1')
+test1_ObservationListManager.observation_sets
+
 
 obs1 = AgentObservation(UE4Coord(0,0),0.5, 1, 1234, 'agent2')
 obs2 = AgentObservation(UE4Coord(0,0),0.7, 2, 1235, 'agent2')
@@ -388,11 +396,13 @@ obs4 = AgentObservation(UE4Coord(0,1),0.95, 3, 1237, 'agent2')
 test1_ObservationListManager.update_rav_obs_set('agent2', set([obs4]))
 test1_ObservationListManager.get_all_observations()
 assert test1_ObservationListManager.get_observation_set('agent2') == set([obs1, obs2, obs3])
+assert abs(test1_ObservationListManager.get_belief_map_from_observations(test_grid).get_belief_map_component(UE4Coord(0,0)).likelihood - 0.074468) < 0.0001
+assert abs(test1_ObservationListManager.get_belief_map_from_observations(test_grid).get_belief_map_component(UE4Coord(0,1)).likelihood - 0.395833) < 0.0001
 
 #%%
 
        
-def get_move_from_belief_map(bel_map, current_grid_loc, lat_spacing, lng_spacing, epsilon):
+def get_move_from_belief_map_epsilon_greedy(bel_map, current_grid_loc, lat_spacing, lng_spacing, epsilon):
     '''take and epsilon greedy approach'''
     #assume grid is regular, get all neighbors that are within max(lat_spacing, long_spacing)7
     #assuming that lat_spacing < 2* lng_spacing and visa versa
@@ -415,6 +425,7 @@ def get_move_from_belief_map(bel_map, current_grid_loc, lat_spacing, lng_spacing
 #        move = max(map(lambda neighbor: bel_map[neighbor].likelihood, neighbors))
         print('returning greedy move: {}'.format(move))
     return move
+
 
 #everything that could be important for measuring agent performance/progress
 AgentAnalysisState = namedtuple('AgentAnalysisState', ['timestep','timestamp','rav_name',
@@ -686,9 +697,9 @@ if __name__ == '__main__':
     client = airsim.MultirotorClient()
     create_rav(client, "Drone1")
     create_rav(client, "Drone2")
-    
+    client.getVehiclesInRange("Drone1", ["Drone2"],1000000)
     #rav1.simShowPawnPath(False, 1200, 20)
-
+    sys.exit()
     #grid shared between rav
     grid = UE4Grid(20, 15, UE4Coord(0,0), 120, 150)
     
