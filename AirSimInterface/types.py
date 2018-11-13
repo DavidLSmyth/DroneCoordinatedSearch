@@ -51,6 +51,9 @@ class Vector3r(MsgpackMixin):
     @staticmethod
     def nanVector3r():
         return Vector3r(np.nan, np.nan, np.nan)
+    
+    def __str__(self):
+        return f"Vector3r({self.x_val}, {self.y_val}, {self.z_val})"
 
     def __add__(self, other):
         return Vector3r(self.x_val + other.x_val, self.y_val + other.y_val, self.z_val + other.z_val)

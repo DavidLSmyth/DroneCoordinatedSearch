@@ -26,7 +26,7 @@ class VehicleClient:
         return self.battery.cap_remaining    
     
     def getVehiclesInRange(self, vehicle_name, otherVehiclesNames, range_m):
-        return list(filter(lambda other_vehicle_name: self.simGetGroundTruthKinematics(other_vehicle_name).position.distance_to(self.simGetGroundTruthKinematics(vehicle_name)) < range_m, otherVehiclesNames))
+        return list(filter(lambda other_vehicle_name: self.simGetGroundTruthKinematics(other_vehicle_name).position.distance_to(self.simGetGroundTruthKinematics(vehicle_name).position) < range_m, otherVehiclesNames))
     
     def can_coord_with_other(self, otherVehicleName, range_m):
         return otherVehicleName in self.getVehiclesInRange(otherVehicleName, range_m)
@@ -153,6 +153,11 @@ class VehicleClient:
         kinematics_state = self.client.call('simGetGroundTruthKinematics', vehicle_name)
         return KinematicsState.from_msgpack(kinematics_state)
     simGetGroundTruthKinematics.__annotations__ = {'return': KinematicsState}
+    
+    def simGetPositionWRTOrigin(self, vehicle_name = ''):
+        position = self.client.call('simGetPositionWRTOrigin', vehicle_name)
+        return Vector3r.from_msgpack(position)
+    
     def simGetGroundTruthEnvironment(self, vehicle_name = ''):
         env_state = self.client.call('simGetGroundTruthEnvironment', vehicle_name)
         return EnvironmentState.from_msgpack(env_state)

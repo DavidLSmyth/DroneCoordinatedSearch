@@ -9,11 +9,10 @@ import sys
 import enum
 sys.path.append('.')
 sys.path.append('..')
-import requests
+sys.path.append("D:\ReinforcementLearning\DetectSourceAgent")
 import os
 import time
 from collections import namedtuple
-import copy
 import random
 import typing
 import functools
@@ -23,6 +22,14 @@ import pathlib
 
 import AirSimInterface.client as airsim
 from AirSimInterface.types import *
+from utils import UE4Coord
+
+from Utils.UE4Grid import UE4Grid
+from Utils.ImageAnalysis import sensor_reading
+from Utils.UE4Coord import UE4Coord
+from Utils.AgentObservation import AgentObservation, AgentObservations
+
+
 
 import numpy as np
 
@@ -90,304 +97,35 @@ class Vector3r:
 
 #%%
 
-class UE4Coord:
-    '''A coordinate which represents an objects location in an unreal engine environment'''
-    def __init__(self, x_val, y_val, z_val = 0):
-        self.x_val, self.y_val, self.z_val = x_val, y_val, z_val
-        if not isinstance(self.x_val, float):
-            try:
-                self.x_val = float(self.x_val)
-            except Exception as e:
-                raise(e)
+#import UE4Coord
         
-        if not isinstance(self.y_val, float):
-            try:
-                self.y_val = float(self.y_val)
-            except Exception as e:
-                raise(e)
-                
-        if not isinstance(self.z_val, float):
-            try:
-                self.z_val = float(self.z_val)
-            except Exception as e:
-                raise(e)
-                
-    def to_vector3r(self):
-        return Vector3r(self.x_val, self.y_val, self.z_val)
+#import UE4Grid
         
-    def __add__(self, other):
-        return UE4Coord(self.x_val + other.x_val, self.y_val + other.y_val, self.z_val + other.z_val)
+    
         
-    def __sub__(self, other):
-        return UE4Coord(self.x_val - other.x_val, self.y_val - other.y_val, self.z_val - other.z_val)
-        
-    def mul(self, int):
-        pass
-    
-    def get_dist_to_other(self, other):
-        return ((self.x_val - other.x_val)**2 + (self.y_val - other.y_val)**2 + (self.z_val - other.z_val)**2)**0.5
-    
-    def __eq__(self, other):
-        if self.x_val == other.x_val and self.y_val == other.y_val and self.z_val == other.z_val:
-            return True
-        else:
-            return False
-    
-    def __str__(self):
-        return 'UE4Coord({x_val}, {y_val}, {z_val})'.format(x_val = self.x_val, y_val = self.y_val, z_val = self.z_val)
-    
-    def __repr__(self):
-        return 'UE4Coord({x_val}, {y_val}, {z_val})'.format(x_val = self.x_val, y_val = self.y_val, z_val = self.z_val)
-    
-    def __hash__(self):
-         return hash(repr(self))
-        
-class UE4GridFactory:
-    def __init__(self, lat_spacing, lng_spacing, origin, x_lim=None, y_lim=None, no_x=None, no_y=None):
-        self.lat_spacing = lat_spacing
-        self.lng_spacing = lng_spacing
-        self.origin = origin
-        if x_lim and y_lim:
-            self.x_lim, self.y_lim = x_lim, y_lim
-            self.create_grid_with_limits()
-        if no_x and no_y: 
-            self.no_x, self.no_y = no_x, no_y
-            self.create_grid_with_no_points()
-        if not all([x_lim, y_lim]) and not all([no_x, no_y]):
-            raise Exception('Either give a limit to the grid or an x and y spacing')
-            
-        
-    def create_grid_with_limits(self):
-        self.no_x = int(self.x_lim/self.lng_spacing)
-        self.no_y = int(self.y_lim/self.lat_spacing)
-        self.create_grid_with_no_points()
-        
-    def create_grid_with_no_points(self):
-        self.grid = []
-        backtrack = False
-        for x_counter in range(self.no_x):
-            if backtrack:
-                for y_counter in range(self.no_y):
-                    self.grid.append(self.origin + UE4Coord(x_counter * self.lng_spacing, y_counter * self.lat_spacing))
-                backtrack = not backtrack
-            else:
-                for y_counter in range(self.no_y-1, -1, -1):
-                    self.grid.append(self.origin + UE4Coord(x_counter * self.lng_spacing, y_counter * self.lat_spacing))
-                backtrack = not backtrack
-            
-    def get_grid_points(self):
-        return self.grid
-    
-class UE4Grid:
-    def __init__(self, lat_spacing, lng_spacing, origin, x_lim=None, y_lim=None, no_x=None, no_y=None):
-        if not all([x_lim, y_lim]) and not all([no_x, no_y]):
-            raise Exception('Either give a limit to the grid or an x and y spacing')
-        self.origin = origin
-        self.grid_points = UE4GridFactory(lat_spacing, lng_spacing, origin, x_lim, y_lim, no_x, no_y).get_grid_points()
-        self.lat_spacing = lat_spacing
-        self.lng_spacing = lng_spacing
-        self.no_x = no_x if no_x else int(x_lim/lng_spacing)
-        self.no_y = no_y if no_y else int(y_lim/lat_spacing)
-    
-    def get_grid_points(self):
-        return self.grid_points
-    
-    def get_lat_spacing(self):
-        return self.lat_spacing
-    
-    def get_lng_spacing(self):
-        return self.lng_spacing
-    
-    def get_no_points_x(self):
-        return self.no_x
-    
-    def get_no_points_y(self):
-        return self.no_y
-    
-    def get_neighbors(self, grid_loc, radius):
-        '''Gets neighbors of grid_loc within radius.'''
-        return list(filter(lambda alt_grid_loc: alt_grid_loc.get_dist_to_other(grid_loc) <= radius and alt_grid_loc != grid_loc, self.get_grid_points()))
-        
-test_grid = UE4Grid(1, 1, UE4Coord(0,0), 10, 6)
-assert set(test_grid.get_neighbors(UE4Coord(2,2), 1.9)) == set([UE4Coord(1,2), UE4Coord(2,1), UE4Coord(2,3), UE4Coord(3,2), UE4Coord(3,3), UE4Coord(1,3), UE4Coord(1,1), UE4Coord(3,1)])
-    
-def get_image_response(image_loc: str):
-    headers = {'Prediction-Key': "fdc828690c3843fe8dc65e532d506d7e", "Content-type": "application/octet-stream", "Content-Length": "1000"}
-    with open(image_loc,'rb') as f:
-        response =requests.post('https://southcentralus.api.cognitive.microsoft.com/customvision/v2.0/Prediction/287a5a82-272d-45f3-be6a-98bdeba3454c/image?iterationId=3d1fd99c-0b93-432f-b275-77260edc46d3', data=f, headers=headers)
-    return response.json()
 
 
-def get_highest_pred(image_json):
-    max_pred = 0
-    max_pred_details = ''
-    for pred in image_json['predictions']:
-        if pred['probability'] > max_pred:
-            max_pred = pred['probability']
-            max_pred_details = pred
-    return max_pred, max_pred_details
-        
-sensor_reading = lambda image_loc: get_highest_pred(get_image_response(image_loc))
 
-#assert get_highest_pred(get_image_response('C:/Users/13383861/Downloads/test_train.jpg'))[0] > 0.6
 #test
 
 
 
-#an agent precept consists of a grid location, a detection probability, a timestep, a timestamp and the observer name
-AgentObservation = namedtuple('obs_location', ['grid_loc','probability','timestep', 'timestamp', 'observer_name'])
-
-#A belief map component consists of a grid location and a likelihood
-BeliefMapComponent = namedtuple('belief_map_component', ['grid_loc','likelihood'])
 
 
 #%%
-#Code and test for class which manages agent observations in a set grid
-class AgentObservations():
-    '''A class which records agent observations in a UE4Grid'''
-    def __init__(self, grid: UE4Grid):
-        self.grid = grid
-        #observations consist of agent percepts
-        self.observations = []
-        
-    def record_agent_observation(self, new_observation: AgentObservation):
-        self.observations.append(new_observation)
-        
-    def get_most_recent_observation(self, observations = []):
-        '''Returns the most recent observation in a list of observations'''
-        if not observations:
-            observations = self.observations
-        return sorted(observations, key = lambda observation: observation.timestamp, reverse = True)[0]
-    
-    def get_most_recent_observation_at_position(self, grid_loc: UE4Coord):
-        return self.get_most_recent_observation(self.get_all_observations_at_position(grid_loc))
-    
-    def get_all_observations_at_position(self, grid_loc: UE4Coord):
-        return list(filter(lambda observation: observation.grid_loc == grid_loc, self.observations))
-    
-test_grid = UE4Grid(1, 1, UE4Coord(0,0), 10, 6)
-test_agent_observations = AgentObservations(test_grid)
-obs1 = AgentObservation(UE4Coord(0,0),0.5, 1, 1234, 'agent1')
-obs2 = AgentObservation(UE4Coord(0,0),0.7, 2, 1235, 'agent1')
-obs3 = AgentObservation(UE4Coord(0,1),0.9, 3, 1237, 'agent1')
-
-test_agent_observations.record_agent_observation(obs1)
-test_agent_observations.record_agent_observation(obs2)
-test_agent_observations.record_agent_observation(obs3)
-
-assert test_agent_observations.get_most_recent_observation() == obs3
-assert test_agent_observations.get_most_recent_observation_at_position(UE4Coord(0,0)) == obs2
-assert test_agent_observations.get_all_observations_at_position(UE4Coord(0,1)) == [obs3]
 
 
-calc_posterior = lambda observation, prior: (prior * observation) / ((prior * observation) + (1-prior)*(1-observation))
-assert abs(calc_posterior(0.5, 0.2) - 0.2) <= 0.001
-assert abs(calc_posterior(0.8, 0.2) - 0.5) <= 0.001
+
+
 
 
 #%%
 #Calculation of posterior given prior and observations
 
-def get_posterior_given_obs(observations:list, prior):
-    '''For a sequence of observations calculates the posterior probability given a prior.'''
-    for observation in observations:
-        prior = calc_posterior(observation, prior)
-    return prior
-        
-assert abs(get_posterior_given_obs([0.5,0.2,0.8], 0.5) - 0.5) <= 0.001
+
 
 #%%
-#######################  Belief map and tests  #######################
 
-#A belief map has an agent name (beliefs belong to an agent) consists of belief map components
-#Leave this as namedtuple if don't need to define methods
-class BeliefMap:
-    
-    def __init__(self, agent_name: str, grid: UE4Grid, belief_map_components: typing.List[BeliefMapComponent], prior: typing.Dict[UE4Coord, float]):
-        self.agent_name = agent_name
-        self.grid = grid
-        self.belief_map_components = belief_map_components
-        self.prior = prior
-    
-    def get_prior(self)->typing.Dict[UE4Coord, float]:
-        return self.prior
-    
-    def get_grid(self)->UE4Grid:
-        return self.grid
-            
-    def get_belief_map_components(self):
-        return self.belief_map_components
-    
-    def update_from_prob(self, grid_loc, obs_prob):
-        prior_val = self.get_belief_map_component(grid_loc).likelihood
-        self.belief_map_components[self._get_observation_grid_index(grid_loc)] = BeliefMapComponent(grid_loc, get_posterior_given_obs([obs_prob], prior_val))
-        
-    def update_from_observation(self, agent_observation: AgentObservation):
-        self.update_from_prob(agent_observation.grid_loc, agent_observation.probability)
-        
-    def update_from_observations(self, agent_observations: typing.Set[AgentObservation]):
-        for observation in agent_observations:
-            self.update_from_observation(observation)
-    
-    def _get_observation_grid_index(self, grid_loc: UE4Coord):
-        return self.belief_map_components.index(self.get_belief_map_component(grid_loc))
-    
-    def get_belief_map_component(self, grid_loc):
-        if grid_loc in map(lambda belief_map_component: belief_map_component.grid_loc ,self.belief_map_components):
-            return next(filter(lambda belief_map_component: belief_map_component.grid_loc == grid_loc, self.belief_map_components))
-        else:
-            raise Exception("{} is not in the belief map".format(grid_loc))
-    
-    def __eq__(self, other):
-        #check if grids are the same an componenents are the same
-        pass
-    
-    def __str__(self):
-        return str({"grid": self.grid,"prior": self.prior,"agent_name": self.agent_name,"components": self.belief_map_components})
- 
-#maybe this should go in contsructor and make regular class
-def create_belief_map(grid, agent_name, prior = {}):
-    '''Creates an occupancy belief map for a given observer and a set of grid locations.
-    Prior is a mapping of grid_points to probabilities'''
-    if not prior:
-        #use uniform uninformative prior
-        prior = {grid_point: 1/len(grid.get_grid_points()) for grid_point in grid.get_grid_points()}
-    return BeliefMap(agent_name, grid, [BeliefMapComponent(grid_point, prior[grid_point]) for grid_point in grid.get_grid_points()], prior)
-    #return {grid_locs[i]: ObsLocation(grid_locs[i],prior[i], 0, time.time(), observer_name) for i in range(len(grid_locs))}
-
-test_grid = UE4Grid(1, 1, UE4Coord(0,0), 10, 6)
-test_map = create_belief_map(test_grid, "agent1")
-assert test_map.get_belief_map_component(UE4Coord(0,0)) == BeliefMapComponent(UE4Coord(0,0), 1/len(test_grid.get_grid_points()))
-assert test_map._get_observation_grid_index(UE4Coord(0,0)) == 5
-
-test_map.update_from_prob(UE4Coord(0,0), 0.9)
-assert 0.132<test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.133
-
-#prove order in which observations come in doesn't matter
-obs1 = AgentObservation(UE4Coord(0,0),0.4, 1, 1234, 'agent1')
-obs2 = AgentObservation(UE4Coord(0,0),0.7, 2, 1235, 'agent1')
-obs3 = AgentObservation(UE4Coord(0,0),0.93, 3, 1237, 'agent1')
-test_map = create_belief_map(test_grid, "agent1")
-test_map.update_from_observation(obs1)
-assert 0.0111 < test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.0112 
-test_map.update_from_observation(obs2)
-assert 0.025688 < test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.0256881 
-test_map.update_from_observation(obs3)
-assert 0.2594 < test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.2595
-
-#now check observing in a different order gives same result
-test_map = create_belief_map(test_grid, "agent1")
-test_map.update_from_observation(obs2)
-test_map.update_from_observation(obs1)
-test_map.update_from_observation(obs3)
-assert 0.2594 < test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.2595 
-
-#now check observing in a different order gives same result
-test_map = create_belief_map(test_grid, "agent1")
-test_map.update_from_observation(obs3)
-test_map.update_from_observation(obs2)
-test_map.update_from_observation(obs1)
-assert 0.2594 < test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.2595 
 
 #######################  Belief map and tests  #######################
 
@@ -395,107 +133,7 @@ assert 0.2594 < test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.
 #%%
 #######################  Observation Set Manager and tests  #######################
 
-class ObservationSetManager:
-    '''
-    Manages the sensor measurements of other agents. Observations don't have to be taken at disrete locations - 
-    the continuous position can be recorded and the grid location inferred from this.
-    Calculating a belief map from these sets of observations requires a grid so that each recorded observation can
-    be 
-    '''
-    
-    def __init__(self, agent_name: 'name of the agent that owns this observation list manager'):
-        #self.self_meas_list = []
-        #key value pairs of form agent_name: list of AgentObservations
-        self.observation_sets = dict()
-        self.agent_name = agent_name
-        #agent should initialize its own observations
-        self.init_rav_observation_set(self.agent_name)    
-    
-    #really strange behaviour: using this initialises the class with observations that don't exist... self.observation_sets[rav_name] = set()
-    def init_rav_observation_set(self, rav_name, observations = None):
-        '''initialise a new list of observations for a RAV'''
-        if not observations:
-            self.observation_sets[rav_name] = set()
-        else:
-            self.observation_sets[rav_name] = observations
-        #self.observation_sets[rav_name] = observations
 
-    def get_all_observations(self):
-        return functools.reduce(lambda x,y: x.union(y) if x else y, self.observation_sets.values(), set())
-        
-    def get_observation_set(self, rav_name) -> typing.Set[AgentObservation]:
-        '''Get list of observations from a RAV'''
-        return self.observation_sets[rav_name]
-    
-    def update_rav_obs_set(self, rav_name, observations: typing.Set[AgentObservation]):
-        #check if rav is present before updating
-        if rav_name not in self.observation_sets:
-            self.init_rav_observation_set(rav_name)
-        #this avoids recording duplicate observations
-        self.observation_sets[rav_name].update(observations)
-        
-    def update_from_other_obs_list_man(self, other):
-        '''Might need to check that the timestamps must be different...'''
-        for rav_name, observation_set in other.observation_sets.items():
-            self.update_rav_obs_set(rav_name, observation_set)
-            
-    def get_discrete_belief_map_from_observations(self, grid):
-        '''Given a descrete grid, returns a belief map containing the likelihood of the source
-        being contained in each grid segment'''
-        #ToDo:
-        #Currently observations must be made at grid locations - instead compute which observations are made 
-        #in each grid location and then compute the belief map
-        return_belief_map = create_belief_map(grid, self.agent_name)
-        return_belief_map.update_from_observations(self.get_all_observations())
-        return return_belief_map
-    
-    def get_continuous_belief_map_from_observations(self, grid_bounds):
-        '''Given grid bounds, returns a function which returns the likelihood given the 
-        continuous position of the RAV. I.E. transform the discrete PDF as above to a 
-        continuous one.'''
-        pass
-
-test_grid = UE4Grid(1, 1, UE4Coord(0,0), 6, 5)
-
-test_ObservationSetManager = ObservationSetManager('agent1')
-test_ObservationSetManager.observation_sets
-
-obs1 = AgentObservation(UE4Coord(0,0),0.5, 1, 1234, 'agent2')
-obs2 = AgentObservation(UE4Coord(0,0),0.7, 2, 1235, 'agent2')
-obs3 = AgentObservation(UE4Coord(0,1),0.95, 3, 1237, 'agent2')
-obs4 = AgentObservation(UE4Coord(0,1),0.9, 3, 1238, 'agent1')
-
-test_ObservationSetManager.init_rav_observation_set('agent2', set([obs1, obs2]))
-test_ObservationSetManager.observation_sets
-test_ObservationSetManager.update_rav_obs_set('agent2', set([obs3]))
-
-test_ObservationSetManager.get_all_observations()
-
-assert test_ObservationSetManager.get_observation_set('agent2') == set([obs1, obs2, obs3])
-assert test_ObservationSetManager.get_observation_set('agent1') == set([])
-   
-test_ObservationSetManager.update_rav_obs_set('agent1', set([obs4]))
-
-assert not test_ObservationSetManager.get_all_observations().difference(set([obs1, obs2, obs3, obs4]))
-
-
-###################################################
-# Check that duplicate observations aren't added
-test_grid = UE4Grid(1, 1, UE4Coord(0,0), 6, 5)
-test1_ObservationSetManager = ObservationSetManager('agent1')
-
-obs1 = AgentObservation(UE4Coord(0,0),0.5, 1, 1234, 'agent2')
-obs2 = AgentObservation(UE4Coord(0,0),0.7, 2, 1235, 'agent2')
-obs3 = AgentObservation(UE4Coord(0,1),0.95, 3, 1237, 'agent2')
-
-test1_ObservationSetManager.update_rav_obs_set('agent2',[obs1, obs2, obs3])
-test1_ObservationSetManager.observation_sets
-#test that duplicate measurements won't occur
-obs4 = AgentObservation(UE4Coord(0,1),0.95, 3, 1237, 'agent2')
-test1_ObservationSetManager.update_rav_obs_set('agent2', set([obs4]))
-assert test1_ObservationSetManager.get_observation_set('agent2') == set([obs1, obs2, obs3])
-assert abs(test1_ObservationSetManager.get_discrete_belief_map_from_observations(test_grid).get_belief_map_component(UE4Coord(0,0)).likelihood - 0.074468) < 0.0001
-assert abs(test1_ObservationSetManager.get_discrete_belief_map_from_observations(test_grid).get_belief_map_component(UE4Coord(0,1)).likelihood - 0.395833) < 0.0001
 
 #%%
 #########################  Action selection strategies  #########################
@@ -928,7 +566,7 @@ def run_t_timesteps(occupancy_grid_agent):
 if __name__ == '__main__':
     
     grid = UE4Grid(20, 15, UE4Coord(0,0), 120, 150)
-    rav_names = ["Drone1"]
+    rav_names = ["Drone2"]
                  #, "Drone2"]
     client = airsim.MultirotorClient()
     for rav_name in rav_names:
@@ -951,7 +589,7 @@ if __name__ == '__main__':
     #                             lifetime = 200)
 
     
-    occupancy_grid_agent1 = OccupancyGridAgent(grid, UE4Coord(0,0), get_move_from_belief_map_epsilon_greedy, -12, 0.3, client, "Drone1")
+    occupancy_grid_agent1 = OccupancyGridAgent(grid, UE4Coord(0,0), get_move_from_belief_map_epsilon_greedy, -12, 0.3, client, "Drone2")
     occupancy_grid_agent1.explore_t_timesteps(20)
     #occupancy_grid_agent2 = OccupancyGridAgent(grid, UE4Coord(20,15),get_move_from_belief_map_epsilon_greedy, -12, 0.3, client, "Drone2")
     #occupancy_grid_agent1.explore_t_timesteps(10)
@@ -966,7 +604,7 @@ if __name__ == '__main__':
     # showPlannedWaypoints(self, x1, y1, z1, x2, y2, z2, thickness=50, lifetime=10, debug_line_color='red', vehicle_name = '')
     
     
-    destroy_rav(client, "Drone1")
+    destroy_rav(client, "Drone2")
     #destroy_rav(client, "Drone2")
     #for grid_loc in grid_locs:
     ##rav.moveOnPathAsync(list(map(lambda x: x.to_vector3r(),grid_locs)), 8)

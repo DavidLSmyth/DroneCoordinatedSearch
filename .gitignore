@@ -106,6 +106,8 @@ venv.bak/
 
 #image data and csvs
 Data/
+Analysis/
+Observations/
 .csv
 .png
 .jpg
