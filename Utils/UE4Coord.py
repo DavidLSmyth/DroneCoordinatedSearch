@@ -49,10 +49,10 @@ class UE4Coord:
             return False
     
     def __str__(self):
-        return 'UE4Coord({x_val}, {y_val}, {z_val})'.format(x_val = self.x_val, y_val = self.y_val, z_val = self.z_val)
+        return 'UE4Coord({x_val},{y_val},{z_val})'.format(x_val = self.x_val, y_val = self.y_val, z_val = self.z_val)
     
     def __repr__(self):
-        return 'UE4Coord({x_val}, {y_val}, {z_val})'.format(x_val = self.x_val, y_val = self.y_val, z_val = self.z_val)
+        return 'UE4Coord({x_val},{y_val},{z_val})'.format(x_val = self.x_val, y_val = self.y_val, z_val = self.z_val)
     
     def __hash__(self):
          return hash(repr(self))

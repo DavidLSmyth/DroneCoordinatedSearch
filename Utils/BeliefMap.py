@@ -4,6 +4,10 @@ Created on Tue Nov 13 11:40:27 2018
 
 @author: 13383861
 """
+
+import sys
+sys.path.append('..')
+sys.path.append('.')
 from collections import namedtuple
 import typing
 from Utils.UE4Grid import UE4Grid
@@ -83,7 +87,18 @@ def create_belief_map(grid, agent_name, prior = {}):
     #return {grid_locs[i]: ObsLocation(grid_locs[i],prior[i], 0, time.time(), observer_name) for i in range(len(grid_locs))}
 
  
+def create_belief_map_from_observations(grid: UE4Grid, agent_name: str, agent_belief_map_prior: typing.Dict[UE4Coord, float], agent_observations: typing.Set[AgentObservation]):
+    '''Since the calculation of posterior likelihood is based only on prior and observations (independent of order), updating a belief map component from measurements can be done 
+    by the following update formula: 
+                                prior * product(over all i observations) observation_i
+        ----------------------------------------------------------------------------------------------------------------------
+        prior * product(over all i observations) observation_i + (1-prior) * product(over all i observations) (1-observation_i)
+    '''
 
+    return_bel_map = create_belief_map(grid, agent_name, agent_belief_map_prior)
+    #update belief map based on all observations...
+    return_bel_map.update_from_observations(agent_observations)
+    return return_bel_map
 
 if __name__ == "__main__":
     
@@ -131,8 +146,8 @@ if __name__ == "__main__":
 
 
 
-
-
+    test_map = create_belief_map_from_observations(test_grid, "agent1", {grid_point: 1/len(test_grid.get_grid_points()) for grid_point in test_grid.get_grid_points()}, set([obs1, obs2, obs3]))
+    assert 0.2594 < test_map.get_belief_map_component(UE4Coord(0,0)).likelihood < 0.2595
 
 
 

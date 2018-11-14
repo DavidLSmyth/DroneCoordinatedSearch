@@ -9,7 +9,7 @@ from Utils.UE4Coord import UE4Coord
 
 
 class UE4GridFactory:
-    def __init__(self, lat_spacing, lng_spacing, origin, x_lim=None, y_lim=None, no_x=None, no_y=None):
+    def __init__(self, lng_spacing, lat_spacing, origin, x_lim=None, y_lim=None, no_x=None, no_y=None):
         self.lat_spacing = lat_spacing
         self.lng_spacing = lng_spacing
         self.origin = origin

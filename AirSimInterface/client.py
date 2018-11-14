@@ -26,10 +26,10 @@ class VehicleClient:
         return self.battery.cap_remaining    
     
     def getVehiclesInRange(self, vehicle_name, otherVehiclesNames, range_m):
-        return list(filter(lambda other_vehicle_name: self.simGetGroundTruthKinematics(other_vehicle_name).position.distance_to(self.simGetGroundTruthKinematics(vehicle_name).position) < range_m, otherVehiclesNames))
+        return list(filter(lambda other_vehicle_name: (self.simGetGroundTruthKinematics(other_vehicle_name).position).distance_to((self.simGetGroundTruthKinematics(vehicle_name).position)) < range_m, otherVehiclesNames))
     
-    def can_coord_with_other(self, otherVehicleName, range_m):
-        return otherVehicleName in self.getVehiclesInRange(otherVehicleName, range_m)
+    def can_coord_with_other(self, vehicle_name, otherVehicleName, range_m):
+        return otherVehicleName in self.getVehiclesInRange(vehicle_name, [otherVehicleName], range_m)
     
     # -----------------------------------  Common vehicle APIs ---------------------------------------------
     def reset(self):

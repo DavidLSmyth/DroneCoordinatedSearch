@@ -3,6 +3,8 @@ import msgpackrpc #install as admin: pip install msgpack-rpc-python
 import numpy as np #pip install numpy
 import time
 
+#MsgpackMixin, ImageType, DrivetrainType, LandedState, Vector3r, Quaternion3r, Pose, CollisionInfo, GeoPoint, YawMode, RCData, ImageRequest, ImageReponse, CarControls, KinematicsState, BatterState, EnvironmentState, CarState, MultirotorState, ProjectionMatrix, CameraInfo, LidarData
+
 class MsgpackMixin:
     def __repr__(self):
         from pprint import pformat
@@ -147,19 +149,19 @@ class Quaternionr(MsgpackMixin):
             raise TypeError('unsupported operand type(s) for \'dot\': %s and %s' % ( str(type(self)), str(type(other))) )
 
     def cross(self, other):
-        if type(self) == typer(other):
+        if type(self) == type(other):
             return (self * other - other * self) / 2
         else:
             raise TypeError('unsupported operand type(s) for \'cross\': %s and %s' % ( str(type(self)), str(type(other))) )
 
     def outer_product(self, other):
-        if type(self) == typer(other):
+        if type(self) == type(other):
             return ( self.inverse()*other - other.inverse()*self ) / 2
         else:
             raise TypeError('unsupported operand type(s) for \'outer_product\': %s and %s' % ( str(type(self)), str(type(other))) )
 
     def rotate(self, other):
-        if type(self) == typer(other):
+        if type(self) == type(other):
             if other.get_length() == 1:
                 return other * self * other.inverse()
             else:
@@ -320,9 +322,7 @@ class BatteryState(MsgpackMixin):
     def update_battery_cap(self, speed: 'm/s'):
         now = time.time() 
         delta = (now - self.old_time_stamp)* 1000
-        print('delta: ',delta)
-        self.old_time_stamp = now
-        
+        self.old_time_stamp = now        
         if self.cap_remaining == 0:
             return
         else:
@@ -371,3 +371,6 @@ class CameraInfo(MsgpackMixin):
 class LidarData(MsgpackMixin):
     point_cloud = 0.0
     time_stamp = np.uint64(0)
+    
+    
+    

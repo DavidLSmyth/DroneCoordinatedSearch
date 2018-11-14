@@ -7,7 +7,8 @@ Created on Tue Nov 13 11:55:04 2018
 
 import random
 
-from Utils.AgentObservation import AgentObservation, ObservationSetManager
+from Utils.AgentObservation import AgentObservation
+from Utils.ObservationSetManager import ObservationSetManager
 from Utils.UE4Coord import UE4Coord
 from Utils.UE4Grid import UE4Grid
 from Utils.BeliefMap import create_belief_map, BeliefMap

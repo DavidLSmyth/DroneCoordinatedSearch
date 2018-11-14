@@ -12,7 +12,12 @@ from Utils.UE4Grid import UE4Grid
 
 
 #an agent precept consists of a grid location, a detection probability, a timestep, a timestamp and the observer name
-AgentObservation = namedtuple('obs_location', ['grid_loc','probability','timestep', 'timestamp', 'observer_name'])
+AgentObservation = namedtuple('AgentObservation', ['grid_loc','probability','timestep', 'timestamp', 'observer_name'])
+
+#test = {'grid_loc': 1,'probability': 2,'timestep': 2, 'timestamp': 4, 'observer_name': 8}
+#test1 = [1,2,4,8, 9]
+#AgentObservation(**test)
+#AgentObservation(*test1)
 
 #Code and test for class which manages agent observations in a set grid
 class AgentObservations():
@@ -36,6 +41,26 @@ class AgentObservations():
     
     def get_all_observations_at_position(self, grid_loc: UE4Coord):
         return list(filter(lambda observation: observation.grid_loc == grid_loc, self.observations))
+    
+    
+def _get_agent_observation_csv(grid_loc,probability,timestep,timestamp,observer_name):
+    return f"{grid_loc}, {probability}, {timestep}, {timestamp}, {observer_name}"
+     
+def get_agent_observation_csv(agent_observation: AgentObservation):
+    '''Returns elements of agent state that are important for analysis that can be written to csv. Position, battery cap., total_dist_travelled, battery_consumed, occ_grid'''
+    #csv_headers = ['timestep', 'timestamp', 'rav_name', 'position_intended', 'position_measured', 'total_dist_travelled', 'remaining_batt_cap', 'prop_battery_cap_used', 'sensor_reading', 'occ_grid_locs', 'occ_grid_likelihoods', 'coordinated_with_other_bool', 'coordinated_with_other_names']
+    #return str(agent_analysis_state._fields).replace(')','').replace('(','').replace("'", '')
+    return _get_agent_observation_csv(**agent_observation._asdict())
+
+#AgentObservation = namedtuple('obs_location', ['grid_loc','probability','timestep', 'timestamp', 'observer_name'])
+def _init_observations_file(file_path):
+    with open(file_path, 'w+') as f:
+        f.write(','.join(AgentObservation._fields))
+        
+def _write_to_obserations_file(file_path, agent_observation):
+    with open(file_path, 'a') as f:
+        f.write('\n' + get_agent_observation_csv(agent_observation))
+        
     
 if __name__ == "__main__":
     test_grid = UE4Grid(1, 1, UE4Coord(0,0), 10, 6)

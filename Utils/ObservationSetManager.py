@@ -4,6 +4,10 @@ Created on Tue Nov 13 11:45:44 2018
 
 @author: 13383861
 """
+
+import sys
+sys.path.append('..')
+sys.path.append('.')
 import typing
 import functools
 from Utils.AgentObservation import AgentObservation
@@ -42,6 +46,16 @@ class ObservationSetManager:
     def get_observation_set(self, rav_name) -> typing.Set[AgentObservation]:
         '''Get list of observations from a RAV'''
         return self.observation_sets[rav_name]
+    
+    def update_with_obseravation(self, observation: AgentObservation):
+        if observation.observer_name not in self.observation_sets:
+            self.init_rav_observation_set(observation.observer_name)
+        #if observation not already included
+        if observation not in self.observation_sets[observation.observer_name]:
+            self.observation_sets[observation.observer_name].update(set([observation]))
+            return observation
+        else:
+            return None
     
     def update_rav_obs_set(self, rav_name, observations: typing.Set[AgentObservation]):
         #check if rav is present before updating
@@ -92,7 +106,7 @@ if __name__ == "__main__":
     assert test_ObservationSetManager.get_observation_set('agent2') == set([obs1, obs2, obs3]), "agent2 observations should have been added to set"
     assert test_ObservationSetManager.get_observation_set('agent1') == set([]), "agent1 observations should be empty"
        
-    test_ObservationSetManager.update_rav_obs_set('agent1', set([obs4]))
+    test_ObservationSetManager.update_with_obseravation(obs4)
     
     assert not test_ObservationSetManager.get_all_observations().difference(set([obs1, obs2, obs3, obs4]))
 
