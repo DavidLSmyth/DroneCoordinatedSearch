@@ -108,10 +108,12 @@ venv.bak/
 Data/
 Analysis/
 Observations/
+Logging/
+Visualisations/
 .csv
 .png
 .jpg
-
+.mp4
 
 
 
